@@ -16,7 +16,7 @@ services:
       - admin-network
 
   app:
-    image: ghcr.io/gogangh/logit-admin:latest
+    image: ghcr.io/nexters-logit/logit-admin:latest
     container_name: admin-app
     restart: unless-stopped
     expose:
