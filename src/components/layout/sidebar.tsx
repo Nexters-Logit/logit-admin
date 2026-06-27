@@ -10,16 +10,41 @@ import {
   FolderKanban,
   BookOpen,
   Database,
+  Image as ImageIcon,
   ChevronLeft,
+  CreditCard,
+  Receipt,
+  Package,
+  BadgeCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 
-const navItems = [
-  { href: "/dashboard", label: "대시보드", icon: LayoutDashboard },
-  { href: "/users", label: "사용자", icon: Users },
-  { href: "/projects", label: "프로젝트", icon: FolderKanban },
-  { href: "/experiences", label: "경험", icon: BookOpen },
-  { href: "/database", label: "데이터베이스", icon: Database },
+const navGroups = [
+  {
+    label: null,
+    items: [
+      { href: "/dashboard", label: "대시보드", icon: LayoutDashboard },
+      { href: "/users", label: "사용자", icon: Users },
+      { href: "/projects", label: "프로젝트", icon: FolderKanban },
+      { href: "/experiences", label: "경험", icon: BookOpen },
+      { href: "/banners", label: "배너", icon: ImageIcon },
+    ],
+  },
+  {
+    label: "결제",
+    items: [
+      { href: "/plans", label: "요금제 관리", icon: Package },
+      { href: "/payments", label: "결제 관리", icon: CreditCard },
+      { href: "/subscriptions", label: "구독 현황", icon: BadgeCheck },
+    ],
+  },
+  {
+    label: null,
+    items: [
+      { href: "/database", label: "데이터베이스", icon: Database },
+    ],
+  },
 ];
 
 interface SidebarProps {
@@ -79,28 +104,40 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         </Button>
       </div>
 
-      <nav className="flex-1 space-y-1 p-2">
-        {navItems.map((item) => {
-          const isActive =
-            pathname === item.href || pathname.startsWith(item.href + "/");
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                collapsed && "justify-center px-2"
-              )}
-              title={collapsed ? item.label : undefined}
-            >
-              <item.icon className="h-4 w-4 shrink-0" />
-              {!collapsed && <span>{item.label}</span>}
-            </Link>
-          );
-        })}
+      <nav className="flex-1 overflow-y-auto p-2">
+        {navGroups.map((group, gi) => (
+          <div key={gi}>
+            {gi > 0 && <Separator className="my-2" />}
+            {group.label && !collapsed && (
+              <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+                {group.label}
+              </p>
+            )}
+            <div className="space-y-0.5">
+              {group.items.map((item) => {
+                const isActive =
+                  pathname === item.href || pathname.startsWith(item.href + "/");
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                      isActive
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                      collapsed && "justify-center px-2"
+                    )}
+                    title={collapsed ? item.label : undefined}
+                  >
+                    <item.icon className="h-4 w-4 shrink-0" />
+                    {!collapsed && <span>{item.label}</span>}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
     </aside>
   );
