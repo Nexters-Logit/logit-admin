@@ -48,7 +48,18 @@ const COLORS = [
 ];
 
 export default function AIUsagePage() {
-  const { data, isLoading } = useAIUsage();
+  const { data, isLoading, isError } = useAIUsage();
+
+  if (isError) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="AI 토큰 사용량" />
+        <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+          데이터를 불러오지 못했습니다. ai_usage_logs 테이블을 확인해 주세요.
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading || !data) {
     return (
