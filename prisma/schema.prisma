@@ -130,6 +130,7 @@ model Plan {
   is_free           Boolean  @default(false)
   is_active         Boolean  @default(true)
   display_order     Int      @default(0)
+  show_on_mobile    Boolean  @default(true)
 
   @@map("plans")
 }

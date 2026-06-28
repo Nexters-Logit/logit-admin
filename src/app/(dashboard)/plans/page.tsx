@@ -40,6 +40,7 @@ type Plan = {
   is_free: boolean;
   is_active: boolean;
   display_order: number;
+  show_on_mobile: boolean;
 };
 
 function formatPrice(n: number) {
@@ -119,6 +120,9 @@ function PlanCard({
             <Tag className="mr-1 h-2.5 w-2.5" />추천
           </Badge>
         )}
+        {!plan.show_on_mobile && (
+          <Badge variant="secondary" className="text-[10px]">모바일 미노출</Badge>
+        )}
         <span className="ml-auto text-[10px] text-muted-foreground">순서 {plan.display_order}</span>
       </div>
     </div>
@@ -138,6 +142,7 @@ type PlanForm = {
   is_free: boolean;
   is_active: boolean;
   display_order: string;
+  show_on_mobile: boolean;
 };
 
 const EMPTY_FORM: PlanForm = {
@@ -153,6 +158,7 @@ const EMPTY_FORM: PlanForm = {
   is_free: false,
   is_active: true,
   display_order: "0",
+  show_on_mobile: true,
 };
 
 function PlanFormFields({
@@ -286,6 +292,14 @@ function PlanFormFields({
           />
           <Label htmlFor="is_active">활성</Label>
         </div>
+        <div className="flex items-center gap-2">
+          <Switch
+            id="show_on_mobile"
+            checked={form.show_on_mobile}
+            onCheckedChange={(v) => onChange({ ...form, show_on_mobile: v })}
+          />
+          <Label htmlFor="show_on_mobile">모바일 노출</Label>
+        </div>
       </div>
     </div>
   );
@@ -309,6 +323,7 @@ function formToPayload(form: PlanForm) {
     is_free: form.is_free,
     is_active: form.is_active,
     display_order: Number(form.display_order),
+    show_on_mobile: form.show_on_mobile,
   };
 }
 
@@ -397,6 +412,7 @@ export default function PlansPage() {
       is_free: plan.is_free,
       is_active: plan.is_active,
       display_order: String(plan.display_order),
+      show_on_mobile: plan.show_on_mobile,
     });
   };
 

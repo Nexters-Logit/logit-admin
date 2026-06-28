@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
       is_free,
       is_active,
       display_order,
+      show_on_mobile,
     } = body;
 
     if (!subscription_type || !plan_key || !name) {
@@ -57,6 +58,7 @@ export async function POST(req: NextRequest) {
         is_free: is_free ?? false,
         is_active: is_active ?? true,
         display_order: Number(display_order ?? 0),
+        show_on_mobile: show_on_mobile ?? true,
       },
     });
 
