@@ -26,12 +26,20 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ColumnDef } from "@tanstack/react-table";
-import { MoreHorizontal, Search } from "lucide-react";
+import { MoreHorizontal, Search, ScrollText } from "lucide-react";
 import { format } from "date-fns";
 import Link from "next/link";
 import Image from "next/image";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
+
+type ActiveSubscription = {
+  type: string;
+  plan: string | null;
+  is_active: boolean;
+  is_auto_renew: boolean;
+  expires_at: string | null;
+};
 
 type UserRow = {
   id: string;
@@ -42,7 +50,22 @@ type UserRow = {
   is_active: boolean;
   created_at: string;
   _count: { projects: number; chats: number };
+  active_subscriptions: ActiveSubscription[] | null;
 };
+
+function SubscriptionBadges({ subs }: { subs: ActiveSubscription[] | null }) {
+  if (!subs || subs.length === 0) return <span className="text-xs text-muted-foreground">없음</span>;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {subs.map((s) => (
+        <Badge key={s.type} variant="outline" className="text-[10px] px-1.5 py-0">
+          {s.type.toUpperCase()} {s.plan ? `· ${s.plan}` : ""}
+          {!s.is_auto_renew && <span className="ml-1 text-muted-foreground">(취소예약)</span>}
+        </Badge>
+      ))}
+    </div>
+  );
+}
 
 const GRADIENT_COLORS = [
   "from-blue-500 to-blue-600",
@@ -161,6 +184,12 @@ export default function UsersPage() {
       ),
     },
     {
+      id: "subscriptions",
+      header: "구독 상태",
+      size: 160,
+      cell: ({ row }) => <SubscriptionBadges subs={row.original.active_subscriptions} />,
+    },
+    {
       accessorKey: "_count.projects",
       header: "프로젝트",
       size: 80,
@@ -186,6 +215,12 @@ export default function UsersPage() {
           <DropdownMenuContent align="end">
             <DropdownMenuItem asChild>
               <Link href={`/users/${row.original.id}`}>상세 보기</Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href={`/subscription-logs?userId=${row.original.id}&search=${row.original.email}`}>
+                <ScrollText className="mr-2 h-3.5 w-3.5" />
+                구독 이벤트 로그
+              </Link>
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={() => {

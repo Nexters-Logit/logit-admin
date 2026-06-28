@@ -116,6 +116,41 @@ model Banner {
   @@map("banners")
 }
 
+model PaymentRecord {
+  id                      String    @id @db.Uuid
+  user_id                 String    @db.Uuid
+  subscription_type       String
+  plan                    String
+  amount                  Int
+  mul_no                  String?
+  rebill_no               String?
+  pay_state               Int?
+  card_name               String?
+  card_number             String?
+  receipt_url             String?
+  subscription_started_at DateTime? @db.Timestamptz
+  subscription_expires_at DateTime? @db.Timestamptz
+  paid_at                 DateTime? @db.Timestamptz
+  created_at              DateTime  @db.Timestamptz
+
+  @@map("payment_records")
+}
+
+model SubscriptionEvent {
+  id               String   @id @db.Uuid
+  user_id          String   @db.Uuid
+  sub_type         String   @db.VarChar(20)
+  event_type       String   @db.VarChar(40)
+  plan             String?  @db.VarChar(20)
+  rebill_no        String?
+  amount           Int?
+  payapp_response  String?
+  notes            String?
+  created_at       DateTime @db.Timestamptz
+
+  @@map("subscription_events")
+}
+
 model Plan {
   id                String   @id @db.VarChar(50)
   subscription_type String   @db.VarChar(20)

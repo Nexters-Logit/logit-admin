@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -30,8 +37,9 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { ColumnDef } from "@tanstack/react-table";
-import { Search, ExternalLink, TrendingUp, CreditCard, Users, DollarSign } from "lucide-react";
+import { Search, ExternalLink, TrendingUp, CreditCard, Users, DollarSign, RotateCcw, MoreHorizontal } from "lucide-react";
 import { format } from "date-fns";
+import { toast } from "sonner";
 
 type PaymentRow = {
   id: string;
@@ -49,11 +57,15 @@ type PaymentRow = {
 };
 
 type StatsData = {
-  monthly: { month: string; revenue: number; count: number }[];
+  monthly: { month: string; revenue: number; count: number; refund_amount: number; refund_count: number }[];
   total_revenue: number;
   total_payments: number;
+  total_refund_amount: number;
+  total_refund_count: number;
   this_month_revenue: number;
   this_month_payments: number;
+  this_month_refund_amount: number;
+  this_month_refund_count: number;
   active_logit_subs: number;
   active_mcp_subs: number;
 };
@@ -67,14 +79,16 @@ function StatCard({
   value,
   sub,
   icon: Icon,
+  className,
 }: {
   title: string;
   value: string;
   sub?: string;
   icon: React.ElementType;
+  className?: string;
 }) {
   return (
-    <Card>
+    <Card className={className}>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
         <Icon className="h-4 w-4 text-muted-foreground" />
@@ -87,11 +101,20 @@ function StatCard({
   );
 }
 
+function PayStateBadge({ state }: { state: number | null }) {
+  if (state === 4) return <Badge className="text-[10px]">완료</Badge>;
+  if (state === 9 || state === 64) return <Badge variant="destructive" className="text-[10px]">환불</Badge>;
+  if (state === 8 || state === 32) return <Badge variant="secondary" className="text-[10px]">취소</Badge>;
+  return <Badge variant="outline" className="text-[10px]">{state ?? "-"}</Badge>;
+}
+
 export default function PaymentsPage() {
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [subType, setSubType] = useState("");
+  const [refundTarget, setRefundTarget] = useState<PaymentRow | null>(null);
 
   const { data: stats, isLoading: statsLoading } = useQuery<StatsData>({
     queryKey: ["payment-stats"],
@@ -118,11 +141,29 @@ export default function PaymentsPage() {
     },
   });
 
+  const refundMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const r = await fetch(`/api/payments/${id}/refund`, { method: "POST" });
+      if (!r.ok) {
+        const body = await r.json().catch(() => ({}));
+        throw new Error(body.error ?? "환불 실패");
+      }
+    },
+    onSuccess: () => {
+      toast.success("환불이 완료되었습니다.");
+      queryClient.invalidateQueries({ queryKey: ["payments"] });
+      queryClient.invalidateQueries({ queryKey: ["payment-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["subscription-logs"] });
+      setRefundTarget(null);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const columns: ColumnDef<PaymentRow>[] = [
     {
       accessorKey: "user_email",
       header: "사용자",
-      size: 220,
+      size: 200,
       cell: ({ row }) => (
         <div>
           <p className="text-sm font-medium">{row.original.user_name ?? "-"}</p>
@@ -132,8 +173,8 @@ export default function PaymentsPage() {
     },
     {
       accessorKey: "subscription_type",
-      header: "구독 타입",
-      size: 100,
+      header: "구독",
+      size: 80,
       cell: ({ row }) => (
         <Badge variant="outline" className="text-[10px]">
           {row.original.subscription_type.toUpperCase()}
@@ -143,18 +184,24 @@ export default function PaymentsPage() {
     {
       accessorKey: "plan",
       header: "플랜",
-      size: 80,
+      size: 70,
       cell: ({ row }) => (
         <span className="text-xs font-medium capitalize">{row.original.plan}</span>
       ),
     },
     {
       accessorKey: "amount",
-      header: "결제금액",
+      header: "금액",
       size: 100,
       cell: ({ row }) => (
         <span className="font-semibold">{formatPrice(row.original.amount)}원</span>
       ),
+    },
+    {
+      accessorKey: "pay_state",
+      header: "상태",
+      size: 80,
+      cell: ({ row }) => <PayStateBadge state={row.original.pay_state} />,
     },
     {
       accessorKey: "paid_at",
@@ -174,8 +221,7 @@ export default function PaymentsPage() {
         if (!card_name) return <span className="text-muted-foreground">-</span>;
         return (
           <span className="text-xs">
-            {card_name}
-            {card_number ? ` ${card_number}` : ""}
+            {card_name}{card_number ? ` ${card_number}` : ""}
           </span>
         );
       },
@@ -183,7 +229,7 @@ export default function PaymentsPage() {
     {
       id: "receipt",
       header: "영수증",
-      size: 70,
+      size: 60,
       cell: ({ row }) =>
         row.original.receipt_url ? (
           <a
@@ -198,13 +244,34 @@ export default function PaymentsPage() {
           <span className="text-muted-foreground">-</span>
         ),
     },
+    {
+      id: "actions",
+      size: 50,
+      cell: ({ row }) => {
+        if (row.original.pay_state !== 4) return null;
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-7 w-7">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={() => setRefundTarget(row.original)}
+              >
+                <RotateCcw className="mr-2 h-3.5 w-3.5" />
+                환불 처리
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        );
+      },
+    },
   ];
 
-  const chartData =
-    stats?.monthly.map((m) => ({
-      ...m,
-      label: m.month.slice(5),
-    })) ?? [];
+  const chartData = stats?.monthly.map((m) => ({ ...m, label: m.month.slice(5) })) ?? [];
 
   return (
     <div className="space-y-6">
@@ -212,16 +279,29 @@ export default function PaymentsPage() {
 
       {/* Stats */}
       {statsLoading ? (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-28" />)}
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
+          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-28" />)}
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
           <StatCard
             title="이번 달 매출"
             value={`${formatPrice(stats?.this_month_revenue ?? 0)}원`}
             sub={`${stats?.this_month_payments ?? 0}건`}
             icon={TrendingUp}
+          />
+          <StatCard
+            title="이번 달 환불"
+            value={`${formatPrice(stats?.this_month_refund_amount ?? 0)}원`}
+            sub={`${stats?.this_month_refund_count ?? 0}건`}
+            icon={RotateCcw}
+            className="border-destructive/30"
+          />
+          <StatCard
+            title="이번 달 순매출"
+            value={`${formatPrice((stats?.this_month_revenue ?? 0) - (stats?.this_month_refund_amount ?? 0))}원`}
+            sub="매출 - 환불"
+            icon={DollarSign}
           />
           <StatCard
             title="전체 누적 매출"
@@ -247,25 +327,23 @@ export default function PaymentsPage() {
       {/* Monthly Chart */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm font-medium">월별 매출 (최근 12개월)</CardTitle>
+          <CardTitle className="text-sm font-medium">월별 매출 / 환불 (최근 12개월)</CardTitle>
         </CardHeader>
         <CardContent>
           {statsLoading ? (
             <Skeleton className="h-48" />
           ) : (
             <ChartContainer
-              config={{ revenue: { label: "매출", color: "hsl(var(--primary))" } }}
+              config={{
+                revenue: { label: "매출", color: "hsl(var(--primary))" },
+                refund_amount: { label: "환불", color: "hsl(var(--destructive))" },
+              }}
               className="h-48 w-full"
             >
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis
-                    dataKey="label"
-                    tick={{ fontSize: 11 }}
-                    tickLine={false}
-                    axisLine={false}
-                  />
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
                   <YAxis
                     tickFormatter={(v) => `${Math.round(v / 1000)}k`}
                     tick={{ fontSize: 11 }}
@@ -276,11 +354,15 @@ export default function PaymentsPage() {
                   <ChartTooltip
                     content={
                       <ChartTooltipContent
-                        formatter={(value) => [`${formatPrice(Number(value))}원`, "매출"]}
+                        formatter={(value, name) => [
+                          `${formatPrice(Number(value))}원`,
+                          name === "revenue" ? "매출" : "환불",
+                        ]}
                       />
                     }
                   />
                   <Bar dataKey="revenue" fill="var(--color-revenue)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="refund_amount" fill="var(--color-refund_amount)" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </ChartContainer>
@@ -306,13 +388,7 @@ export default function PaymentsPage() {
             className="pl-8"
           />
         </form>
-        <Select
-          value={subType}
-          onValueChange={(v) => {
-            setSubType(v === "all" ? "" : v);
-            setPage(1);
-          }}
-        >
+        <Select value={subType || "all"} onValueChange={(v) => { setSubType(v === "all" ? "" : v); setPage(1); }}>
           <SelectTrigger className="w-[140px]">
             <SelectValue placeholder="구독 타입" />
           </SelectTrigger>
@@ -339,6 +415,21 @@ export default function PaymentsPage() {
           onPageChange={setPage}
         />
       )}
+
+      <ConfirmDialog
+        open={refundTarget !== null}
+        onOpenChange={(open) => { if (!open) setRefundTarget(null); }}
+        title="환불 처리"
+        description={
+          refundTarget
+            ? `${refundTarget.user_email ?? refundTarget.user_id}의 ${formatPrice(refundTarget.amount)}원 결제를 환불하시겠습니까? 구독은 만료일까지 유지됩니다.`
+            : ""
+        }
+        confirmLabel="환불"
+        variant="destructive"
+        onConfirm={() => refundTarget && refundMutation.mutate(refundTarget.id)}
+        loading={refundMutation.isPending}
+      />
     </div>
   );
 }
