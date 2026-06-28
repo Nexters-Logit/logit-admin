@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams, useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
@@ -72,6 +72,14 @@ function SubStatusBadge({ row }: { row: EventRow }) {
 }
 
 export default function SubscriptionLogsPage() {
+  return (
+    <Suspense>
+      <SubscriptionLogsContent />
+    </Suspense>
+  );
+}
+
+function SubscriptionLogsContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [page, setPage] = useState(1);
