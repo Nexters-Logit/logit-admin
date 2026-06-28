@@ -151,6 +151,25 @@ model SubscriptionEvent {
   @@map("subscription_events")
 }
 
+model AIUsageLog {
+  id                String   @id @db.Uuid
+  user_id           String   @db.VarChar(36)
+  subscription_type String   @db.VarChar(20)
+  plan              String   @db.VarChar(20)
+  endpoint          String   @db.VarChar(50)
+  model             String?  @db.VarChar(100)
+  input_tokens      Int?
+  output_tokens     Int?
+  created_at        DateTime @db.Timestamptz
+
+  @@index([user_id, created_at])
+  @@index([subscription_type, created_at])
+  @@index([plan, created_at])
+  @@index([endpoint, created_at])
+  @@index([created_at])
+  @@map("ai_usage_logs")
+}
+
 model Plan {
   id                String   @id @db.VarChar(50)
   subscription_type String   @db.VarChar(20)
