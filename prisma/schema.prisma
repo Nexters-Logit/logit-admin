@@ -170,6 +170,40 @@ model AIUsageLog {
   @@map("ai_usage_logs")
 }
 
+model UserToken {
+  user_id                    String    @id @db.Uuid
+  balance                    Int       @default(0)
+  last_monthly_grant_at      DateTime? @db.Timestamptz
+  signup_bonus_granted       Boolean   @default(false)
+  unnotified_referral_amount Int       @default(0)
+  unnotified_referral_count  Int       @default(0)
+  updated_at                 DateTime  @db.Timestamptz
+
+  @@map("user_tokens")
+}
+
+model TokenTransaction {
+  id          String   @id @db.Uuid
+  user_id     String   @db.Uuid
+  amount      Int
+  type        String   @db.VarChar(30)
+  description String?  @db.VarChar(200)
+  created_at  DateTime @db.Timestamptz
+
+  @@index([user_id, created_at])
+  @@map("token_transactions")
+}
+
+model AttendanceLog {
+  id         String   @id @db.Uuid
+  user_id    String   @db.Uuid
+  date       DateTime @db.Date
+  created_at DateTime @db.Timestamptz
+
+  @@unique([user_id, date])
+  @@map("attendance_logs")
+}
+
 model Plan {
   id                String   @id @db.VarChar(50)
   subscription_type String   @db.VarChar(20)

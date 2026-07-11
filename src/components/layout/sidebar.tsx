@@ -17,6 +17,7 @@ import {
   BadgeCheck,
   ScrollText,
   Cpu,
+  Coins,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -39,6 +40,7 @@ const navGroups = [
       { href: "/payments", label: "결제 관리", icon: CreditCard },
       { href: "/subscriptions", label: "구독 현황", icon: BadgeCheck },
       { href: "/subscription-logs", label: "이벤트 로그", icon: ScrollText },
+      { href: "/token-logs", label: "토큰 지급/사용 로그", icon: Coins },
     ],
   },
   {
