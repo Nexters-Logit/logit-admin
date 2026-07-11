@@ -33,6 +33,7 @@ type Plan = {
   name: string;
   original_price: number;
   price: number;
+  monthly_tokens: number;
   description: string | null;
   badge: string | null;
   features: string[] | null;
@@ -96,6 +97,11 @@ function PlanCard({
         <span className="text-xs text-muted-foreground">/ 월</span>
       </div>
 
+      <p className="mb-3 flex items-center gap-1 text-xs text-muted-foreground">
+        <Zap className="h-3 w-3 text-primary" />
+        월 {formatPrice(plan.monthly_tokens)}토큰 제공
+      </p>
+
       {plan.description && (
         <p className="mb-3 text-xs text-muted-foreground">{plan.description}</p>
       )}
@@ -135,6 +141,7 @@ type PlanForm = {
   name: string;
   original_price: string;
   price: string;
+  monthly_tokens: string;
   description: string;
   badge: string;
   features: string;
@@ -151,6 +158,7 @@ const EMPTY_FORM: PlanForm = {
   name: "",
   original_price: "0",
   price: "0",
+  monthly_tokens: "0",
   description: "",
   badge: "",
   features: "",
@@ -238,6 +246,16 @@ function PlanFormFields({
       </div>
 
       <div className="space-y-1">
+        <Label>월 토큰 제공량</Label>
+        <Input
+          type="number"
+          value={form.monthly_tokens}
+          onChange={(e) => onChange({ ...form, monthly_tokens: e.target.value })}
+          placeholder="예: 400"
+        />
+      </div>
+
+      <div className="space-y-1">
         <Label>설명</Label>
         <Input
           value={form.description}
@@ -316,6 +334,7 @@ function formToPayload(form: PlanForm) {
     name: form.name,
     original_price: Number(form.original_price),
     price: Number(form.price),
+    monthly_tokens: Number(form.monthly_tokens),
     description: form.description || null,
     badge: form.badge || null,
     features: featuresArr.length > 0 ? featuresArr : null,
@@ -405,6 +424,7 @@ export default function PlansPage() {
       name: plan.name,
       original_price: String(plan.original_price),
       price: String(plan.price),
+      monthly_tokens: String(plan.monthly_tokens),
       description: plan.description ?? "",
       badge: plan.badge ?? "",
       features: (plan.features ?? []).join("\n"),

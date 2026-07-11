@@ -17,6 +17,7 @@ export async function PATCH(
     if ("name" in body) data.name = body.name;
     if ("original_price" in body) data.original_price = Number(body.original_price);
     if ("price" in body) data.price = Number(body.price);
+    if ("monthly_tokens" in body) data.monthly_tokens = Number(body.monthly_tokens);
     if ("description" in body) data.description = body.description;
     if ("badge" in body) data.badge = body.badge;
     if ("features" in body) data.features = body.features;
