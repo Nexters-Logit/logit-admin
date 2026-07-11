@@ -177,6 +177,7 @@ model Plan {
   name              String   @db.VarChar(100)
   original_price    Int
   price             Int
+  monthly_tokens    Int      @default(0)
   description       String?  @db.Text
   badge             String?  @db.VarChar(100)
   features          Json?
