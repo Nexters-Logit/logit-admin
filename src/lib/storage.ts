@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 
 // Cloudflare R2: endpoint = https://<ACCOUNT_ID>.r2.cloudflarestorage.com
 const s3 = new S3Client({
@@ -28,4 +28,10 @@ export async function uploadFile(
     })
   );
   return `${PUBLIC_URL}/${key}`;
+}
+
+export async function deleteFile(imageUrl: string): Promise<void> {
+  if (!imageUrl.startsWith(PUBLIC_URL)) return;
+  const key = imageUrl.slice(PUBLIC_URL.length + 1);
+  await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }));
 }

@@ -81,10 +81,13 @@ export async function DELETE(
     const collection = getCollectionName(env);
     const { id } = await params;
 
-    await prisma.chat.deleteMany({ where: { user_id: id } });
-    await prisma.question.deleteMany({ where: { user_id: id } });
-    await prisma.project.deleteMany({ where: { user_id: id } });
-    await prisma.user.delete({ where: { id } });
+    // 하나의 트랜잭션으로 묶어, 중간에 실패해도 일부만 삭제된 채 남지 않도록 한다.
+    await prisma.$transaction([
+      prisma.chat.deleteMany({ where: { user_id: id } }),
+      prisma.question.deleteMany({ where: { user_id: id } }),
+      prisma.project.deleteMany({ where: { user_id: id } }),
+      prisma.user.delete({ where: { id } }),
+    ]);
 
     try {
       await qdrantClient.delete(collection, {
