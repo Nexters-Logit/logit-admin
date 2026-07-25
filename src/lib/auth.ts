@@ -1,6 +1,7 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import Credentials from "next-auth/providers/credentials";
+import { getAllowedAdminEmails } from "./admin-emails";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
@@ -35,10 +36,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   callbacks: {
     async signIn({ user, account }) {
       if (account?.provider === "google") {
-        const allowed = process.env.ADMIN_ALLOWED_EMAILS?.split(",").map((e) =>
-          e.trim()
-        );
-        if (!allowed?.includes(user.email || "")) {
+        if (!getAllowedAdminEmails().includes(user.email || "")) {
           return false;
         }
       }
@@ -64,3 +62,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     strategy: "jwt",
   },
 });
+
+// QA 라운드/결과처럼 "누가 변경했는지" 기록이 필요한 곳에서 사용.
+export async function getCurrentAdminEmail(): Promise<string | null> {
+  const session = await auth();
+  return session?.user?.email ?? null;
+}
