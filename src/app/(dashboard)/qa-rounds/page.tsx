@@ -4,14 +4,21 @@ import { useState } from "react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { useQaRounds, useCreateQaRound, type QaRoundFormData } from "@/hooks/use-qa-rounds";
+import {
+  useQaRounds,
+  useCreateQaRound,
+  useDeleteQaRound,
+  type QaRound,
+  type QaRoundFormData,
+} from "@/hooks/use-qa-rounds";
 import { useAdminUsers } from "@/hooks/use-admin-users";
 import { computeQaStats } from "@/lib/qa-stats";
 import { PageHeader } from "@/components/shared/page-header";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { QaRoundCreateDialog } from "./qa-round-create-dialog";
 import { cn } from "@/lib/utils";
 
@@ -19,7 +26,9 @@ export default function QaRoundsPage() {
   const { data: rounds, isLoading } = useQaRounds();
   const { data: admins = [] } = useAdminUsers();
   const createRound = useCreateQaRound();
+  const deleteRound = useDeleteQaRound();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<QaRound | null>(null);
 
   const adminName = (email: string | null) =>
     admins.find((a) => a.email === email)?.name ?? email ?? "—";
@@ -91,6 +100,21 @@ export default function QaRoundsPage() {
                     </div>
                   ))}
                 </div>
+                <div className="mt-3 flex justify-end">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="destructive"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setDeleteTarget(round);
+                    }}
+                  >
+                    <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                    라운드 삭제
+                  </Button>
+                </div>
               </Link>
             );
           })}
@@ -102,6 +126,27 @@ export default function QaRoundsPage() {
         onOpenChange={setDialogOpen}
         onSubmit={handleCreate}
         isPending={createRound.isPending}
+      />
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="QA 라운드 삭제"
+        description={`"${deleteTarget?.name ?? ""}" 라운드와 이 라운드의 체크 결과가 모두 삭제됩니다. 케이스 뱅크 원본은 유지됩니다.`}
+        variant="destructive"
+        confirmLabel="삭제"
+        loading={deleteRound.isPending}
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          deleteRound.mutate(deleteTarget.id, {
+            onSuccess: () => {
+              toast.success("QA 라운드를 삭제했습니다.");
+              setDeleteTarget(null);
+            },
+            onError: (e) =>
+              toast.error(e instanceof Error ? e.message : "라운드 삭제에 실패했습니다."),
+          });
+        }}
       />
     </div>
   );
