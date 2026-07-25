@@ -19,6 +19,19 @@ export async function GET() {
   }
 }
 
+export async function DELETE() {
+  try {
+    const prisma = getPrisma("production");
+    const { count } = await prisma.qaTestCase.deleteMany({
+      where: { results: { none: {} } },
+    });
+    return NextResponse.json({ deleted: count });
+  } catch (error) {
+    console.error("QA cases bulk delete error:", error);
+    return NextResponse.json({ error: "Failed to clear QA cases" }, { status: 500 });
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
