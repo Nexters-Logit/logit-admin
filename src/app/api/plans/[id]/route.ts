@@ -22,8 +22,10 @@ export async function PATCH(
     if ("badge" in body) data.badge = body.badge;
     if ("features" in body) data.features = body.features;
     if ("is_recommended" in body) data.is_recommended = body.is_recommended;
+    if ("is_free" in body) data.is_free = body.is_free;
     if ("is_active" in body) data.is_active = body.is_active;
     if ("display_order" in body) data.display_order = Number(body.display_order);
+    if ("show_on_mobile" in body) data.show_on_mobile = body.show_on_mobile;
 
     const plan = await prisma.plan.update({ where: { id }, data });
     return NextResponse.json(plan);
