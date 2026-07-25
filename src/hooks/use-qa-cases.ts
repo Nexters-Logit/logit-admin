@@ -66,6 +66,21 @@ export function useUpdateQaCase() {
   });
 }
 
+export function useClearUnusedQaCases() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/qa-sheet/cases", { method: "DELETE" });
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({ error: null }));
+        throw new Error(error ?? "Failed to clear QA cases");
+      }
+      return res.json() as Promise<{ deleted: number }>;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["qa-cases"] }),
+  });
+}
+
 export function useDeleteQaCase() {
   const qc = useQueryClient();
   return useMutation({

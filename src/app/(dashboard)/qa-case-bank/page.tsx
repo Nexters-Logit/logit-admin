@@ -7,6 +7,7 @@ import {
   useCreateQaCase,
   useUpdateQaCase,
   useDeleteQaCase,
+  useClearUnusedQaCases,
   type QaTestCase,
   type QaTestCaseFormData,
 } from "@/hooks/use-qa-cases";
@@ -17,19 +18,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
-import { Plus, Pencil, Trash2, ChevronsUpDown } from "lucide-react";
+import { Plus, Pencil, Trash2, ChevronsUpDown, Eraser } from "lucide-react";
 
 export default function QaCaseBankPage() {
   const { data: cases, isLoading } = useQaCases();
   const createCase = useCreateQaCase();
   const updateCase = useUpdateQaCase();
   const deleteCase = useDeleteQaCase();
+  const clearUnused = useClearUnusedQaCases();
 
   const [search, setSearch] = useState("");
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<QaTestCase | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<QaTestCase | null>(null);
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
 
   const allCases = useMemo(() => cases ?? [], [cases]);
 
@@ -100,6 +103,10 @@ export default function QaCaseBankPage() {
   return (
     <div className="space-y-4">
       <PageHeader title="QA 케이스 뱅크" description="라운드에서 재사용할 QA 테스트 항목을 관리합니다.">
+        <Button variant="outline" onClick={() => setClearConfirmOpen(true)}>
+          <Eraser className="mr-2 h-4 w-4" />
+          전체 비우기
+        </Button>
         <Button
           onClick={() => {
             setEditTarget(null);
@@ -246,6 +253,28 @@ export default function QaCaseBankPage() {
             onError: (e) => {
               toast.error(e instanceof Error ? e.message : "삭제에 실패했습니다.");
               setDeleteTarget(null);
+            },
+          });
+        }}
+      />
+
+      <ConfirmDialog
+        open={clearConfirmOpen}
+        onOpenChange={setClearConfirmOpen}
+        title="케이스 뱅크 전체 비우기"
+        description="라운드에서 한 번이라도 사용된 케이스는 보호되어 삭제되지 않습니다. 어떤 라운드에도 포함되지 않은 케이스만 전부 삭제됩니다. 되돌릴 수 없습니다."
+        variant="destructive"
+        confirmLabel="전체 비우기"
+        loading={clearUnused.isPending}
+        onConfirm={() => {
+          clearUnused.mutate(undefined, {
+            onSuccess: (result) => {
+              toast.success(`사용하지 않는 케이스 ${result.deleted}개를 삭제했습니다.`);
+              setClearConfirmOpen(false);
+            },
+            onError: (e) => {
+              toast.error(e instanceof Error ? e.message : "비우기에 실패했습니다.");
+              setClearConfirmOpen(false);
             },
           });
         }}
