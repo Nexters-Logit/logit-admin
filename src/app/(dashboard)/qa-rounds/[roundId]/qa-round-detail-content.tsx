@@ -36,7 +36,6 @@ import {
   Plus,
   Download,
   Upload,
-  ChevronsUpDown,
   ArrowLeft,
   Lock,
   LockOpen,
@@ -66,7 +65,6 @@ export function QaRoundDetailContent({ roundId }: QaRoundDetailContentProps) {
   const [testerFilter, setTesterFilter] = useState<string>("all");
   const [issueOnly, setIssueOnly] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<string | null>(null);
@@ -77,15 +75,6 @@ export function QaRoundDetailContent({ roundId }: QaRoundDetailContentProps) {
       const next = new Set(prev);
       if (next.has(caseId)) next.delete(caseId);
       else next.add(caseId);
-      return next;
-    });
-  };
-
-  const toggleGroup = (key: string) => {
-    setOpenGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
       return next;
     });
   };
@@ -368,16 +357,13 @@ export function QaRoundDetailContent({ roundId }: QaRoundDetailContentProps) {
         <div className="space-y-3">
           {Array.from(groups.entries()).map(([groupKey, group]) => {
             const groupItems = Array.from(group.sections.values()).flat();
-            const failCount = groupItems.filter((it) => it.status === "fail").length;
-            const isOpen = openGroups.has(groupKey);
+            const failCount = groupItems.reduce(
+              (sum, it) => sum + it.checks.filter((check) => check.status === "fail").length,
+              0
+            );
             return (
               <div key={groupKey} className="rounded-lg border">
-                <button
-                  type="button"
-                  onClick={() => toggleGroup(groupKey)}
-                  className="hover:bg-muted/50 flex w-full items-center gap-3 rounded-t-lg px-4 py-3 text-left"
-                >
-                  <ChevronsUpDown className="text-muted-foreground h-4 w-4 shrink-0" />
+                <div className="flex w-full items-center gap-3 rounded-t-lg bg-muted/40 px-4 py-3 text-left">
                   <span className="font-semibold">{group.platform}</span>
                   <span className="text-muted-foreground">/</span>
                   <span className="font-semibold">{group.page}</span>
@@ -387,49 +373,47 @@ export function QaRoundDetailContent({ roundId }: QaRoundDetailContentProps) {
                       Fail {failCount}
                     </span>
                   )}
-                </button>
+                </div>
 
-                {isOpen && (
-                  <div className="overflow-x-auto border-t">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-48">위치</TableHead>
-                          <TableHead className="w-56">테스트 항목</TableHead>
-                          <TableHead className="w-64">테스트 절차</TableHead>
-                          <TableHead className="w-56">기대 결과</TableHead>
-                          <TableHead className="w-32">담당자</TableHead>
-                          <TableHead className="w-40">상태</TableHead>
-                          <TableHead className="w-28" />
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {Array.from(group.sections.entries()).map(([section, sectionItems]) => (
-                          <Fragment key={section}>
-                            {section !== "공통" && (
-                              <TableRow className="hover:bg-transparent">
-                                <td colSpan={7} className="text-muted-foreground bg-muted/30 px-2 py-1.5 text-xs font-semibold">
-                                  {section}
-                                </td>
-                              </TableRow>
-                            )}
-                            {sectionItems.map((it) => (
-                              <QaRoundItemRow
-                                key={it.case_id}
-                                item={it}
-                                roundId={roundId}
-                                roundClosed={roundClosed}
-                                expanded={expandedIds.has(it.case_id)}
-                                onToggleExpand={() => toggleExpand(it.case_id)}
-                                onRemove={() => setRemoveTarget(it.case_id)}
-                              />
-                            ))}
-                          </Fragment>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
+                <div className="overflow-x-auto border-t">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-48">위치</TableHead>
+                        <TableHead className="w-56">테스트 항목</TableHead>
+                        <TableHead className="w-64">테스트 절차</TableHead>
+                        <TableHead className="w-56">기대 결과</TableHead>
+                        <TableHead className="w-32">결과 요약</TableHead>
+                        <TableHead className="w-40">내 체크</TableHead>
+                        <TableHead className="w-28" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {Array.from(group.sections.entries()).map(([section, sectionItems]) => (
+                        <Fragment key={section}>
+                          {section !== "공통" && (
+                            <TableRow className="hover:bg-transparent">
+                              <td colSpan={7} className="text-muted-foreground bg-muted/30 px-2 py-1.5 text-xs font-semibold">
+                                {section}
+                              </td>
+                            </TableRow>
+                          )}
+                          {sectionItems.map((it) => (
+                            <QaRoundItemRow
+                              key={it.case_id}
+                              item={it}
+                              roundId={roundId}
+                              roundClosed={roundClosed}
+                              expanded={expandedIds.has(it.case_id)}
+                              onToggleExpand={() => toggleExpand(it.case_id)}
+                              onRemove={() => setRemoveTarget(it.case_id)}
+                            />
+                          ))}
+                        </Fragment>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </div>
             );
           })}
