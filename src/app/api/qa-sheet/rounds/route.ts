@@ -2,15 +2,40 @@ import { NextRequest, NextResponse } from "next/server";
 import { getPrisma } from "@/lib/prisma";
 import { getCurrentAdminEmail } from "@/lib/auth";
 import { validateRoundName, assertCaseIdsExist } from "@/lib/qa";
+import { ensureQaChecksTable } from "@/lib/qa-checks";
 
 export async function GET() {
   try {
     const prisma = getPrisma("production");
+    await ensureQaChecksTable(prisma);
     const rounds = await prisma.qaRound.findMany({
       orderBy: { created_at: "desc" },
-      include: { items: { select: { status: true } } },
+      include: { items: { select: { case_id: true, status: true } } },
     });
-    return NextResponse.json(rounds);
+    const roundIds = rounds.map((round) => round.id);
+    const checks = roundIds.length
+      ? await prisma.$queryRawUnsafe<{ round_id: string; case_id: string; status: string | null }[]>(
+          `SELECT round_id, case_id, status FROM qa_round_item_checks WHERE round_id = ANY($1::text[])`,
+          roundIds
+        )
+      : [];
+    const checksByRoundId = new Map<string, typeof checks>();
+    for (const check of checks) {
+      const existing = checksByRoundId.get(check.round_id) ?? [];
+      existing.push(check);
+      checksByRoundId.set(check.round_id, existing);
+    }
+    return NextResponse.json(
+      rounds.map((round) => ({
+        ...round,
+        items: round.items.map((item) => ({
+          ...item,
+          checks: checksByRoundId
+            .get(round.id)
+            ?.filter((check) => check.case_id === item.case_id) ?? [],
+        })),
+      }))
+    );
   } catch (error) {
     console.error("QA rounds list error:", error);
     return NextResponse.json({ error: "Failed to fetch QA rounds" }, { status: 500 });

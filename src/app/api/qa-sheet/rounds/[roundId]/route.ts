@@ -3,6 +3,7 @@ import { getPrisma } from "@/lib/prisma";
 import { getCurrentAdminEmail } from "@/lib/auth";
 import { deleteFile } from "@/lib/storage";
 import { ROUND_STATUSES, validateRoundName, getRoundOr404 } from "@/lib/qa";
+import { ensureQaChecksTable } from "@/lib/qa-checks";
 
 export async function GET(
   _req: NextRequest,
@@ -76,10 +77,17 @@ export async function DELETE(
       where: { round_id: roundId, screenshot_url: { not: null } },
       select: { screenshot_url: true },
     });
+    await ensureQaChecksTable(prisma);
+    const checks = await prisma.$queryRawUnsafe<{ screenshot_url: string | null }[]>(
+      `SELECT screenshot_url FROM qa_round_item_checks WHERE round_id = $1 AND screenshot_url IS NOT NULL`,
+      roundId
+    );
     await prisma.qaRound.delete({ where: { id: roundId } });
 
     await Promise.all(
-      items.map((i) => (i.screenshot_url ? deleteFile(i.screenshot_url).catch(() => {}) : Promise.resolve()))
+      [...items, ...checks].map((i) =>
+        i.screenshot_url ? deleteFile(i.screenshot_url).catch(() => {}) : Promise.resolve()
+      )
     );
 
     return NextResponse.json({ success: true });

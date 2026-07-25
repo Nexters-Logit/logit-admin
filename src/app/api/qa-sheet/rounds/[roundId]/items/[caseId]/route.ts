@@ -3,6 +3,7 @@ import { getPrisma } from "@/lib/prisma";
 import { getCurrentAdminEmail } from "@/lib/auth";
 import { deleteFile } from "@/lib/storage";
 import { assertRoundOpen, getRoundOr404, validateResultStatus } from "@/lib/qa";
+import { ensureQaChecksTable } from "@/lib/qa-checks";
 
 export async function PATCH(
   req: NextRequest,
@@ -76,6 +77,13 @@ export async function DELETE(
       return NextResponse.json({ error: "존재하지 않는 라운드 항목입니다." }, { status: 404 });
     }
 
+    await ensureQaChecksTable(prisma);
+    const checks = await prisma.$queryRawUnsafe<{ screenshot_url: string | null }[]>(
+      `SELECT screenshot_url FROM qa_round_item_checks WHERE round_id = $1 AND case_id = $2 AND screenshot_url IS NOT NULL`,
+      roundId,
+      caseId
+    );
+
     await prisma.qaRoundItem.delete({
       where: { round_id_case_id: { round_id: roundId, case_id: caseId } },
     });
@@ -83,6 +91,11 @@ export async function DELETE(
     if (existing.screenshot_url) {
       await deleteFile(existing.screenshot_url).catch(() => {});
     }
+    await Promise.all(
+      checks.map((check) =>
+        check.screenshot_url ? deleteFile(check.screenshot_url).catch(() => {}) : Promise.resolve()
+      )
+    );
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -52,6 +52,7 @@ export function QaRoundDetailContent({ roundId }: QaRoundDetailContentProps) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [testerFilter, setTesterFilter] = useState<string>("all");
+  const [issueOnly, setIssueOnly] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -78,51 +79,76 @@ export function QaRoundDetailContent({ roundId }: QaRoundDetailContentProps) {
 
   const allItems = useMemo(() => items ?? [], [items]);
   const stats = useMemo(() => computeQaStats(allItems), [allItems]);
+  const testerName = (email: string | null) =>
+    testers.find((t) => t.email === email)?.name ?? email ?? "";
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     return allItems.filter((it) => {
       if (statusFilter !== "all") {
         if (statusFilter === "untested") {
-          if (it.status) return false;
-        } else if (it.status !== statusFilter) {
+          if (it.checks.some((check) => check.status)) return false;
+        } else if (!it.checks.some((check) => check.status === statusFilter)) {
           return false;
         }
       }
-      if (testerFilter !== "all" && it.tester_email !== testerFilter) return false;
+      if (testerFilter !== "all" && !it.checks.some((check) => check.tester_email === testerFilter)) {
+        return false;
+      }
       if (term) {
-        const haystack = `${it.title} ${it.steps} ${it.category_l1} ${it.category_l2 ?? ""} ${it.category_l3 ?? ""}`.toLowerCase();
+        const haystack =
+          `${it.title} ${it.steps} ${it.expected} ${it.category_l1} ${it.category_l2 ?? ""} ${it.category_l3 ?? ""} ${it.checks.map((check) => `${check.tester_email} ${check.device ?? ""} ${check.situation ?? ""} ${check.detail ?? ""}`).join(" ")}`.toLowerCase();
         if (!haystack.includes(term)) return false;
       }
       return true;
     });
   }, [allItems, search, statusFilter, testerFilter]);
 
+  const issueRows = useMemo(
+    () =>
+      filtered.flatMap((item) =>
+        item.checks
+          .filter((check) => check.status === "fail" || check.status === "blocked")
+          .map((check) => ({ item, check }))
+      ),
+    [filtered]
+  );
+
   const groups = useMemo(() => {
-    const byL1 = new Map<string, Map<string, QaRoundItem[]>>();
+    const byPage = new Map<
+      string,
+      { platform: string; page: string; sections: Map<string, QaRoundItem[]> }
+    >();
     for (const it of filtered) {
-      if (!byL1.has(it.category_l1)) byL1.set(it.category_l1, new Map());
-      const byL2 = byL1.get(it.category_l1)!;
-      const l2Key = it.category_l2 ?? "";
-      if (!byL2.has(l2Key)) byL2.set(l2Key, []);
-      byL2.get(l2Key)!.push(it);
+      const page = it.category_l2 ?? "공통";
+      const groupKey = `${it.category_l1} / ${page}`;
+      if (!byPage.has(groupKey)) {
+        byPage.set(groupKey, { platform: it.category_l1, page, sections: new Map() });
+      }
+      const group = byPage.get(groupKey)!;
+      const sectionKey = it.category_l3 ?? "공통";
+      if (!group.sections.has(sectionKey)) group.sections.set(sectionKey, []);
+      group.sections.get(sectionKey)!.push(it);
     }
-    return byL1;
+    return byPage;
   }, [filtered]);
 
   const handleExportCsv = () => {
     const header = [
       "대분류", "중분류", "소분류", "테스트 항목", "테스트 절차", "기대 결과",
-      "담당자", "상태", "디바이스/환경", "발생 상황", "스크린샷", "상세 내용", "담당자 확인",
+      "체커", "상태", "디바이스/환경", "발생 상황", "스크린샷", "상세 내용", "담당자 확인",
     ];
-    const testerName = (email: string | null) =>
-      testers.find((t) => t.email === email)?.name ?? email ?? "";
-    const rows = allItems.map((it) => [
-      it.category_l1, it.category_l2 ?? "", it.category_l3 ?? "", it.title, it.steps, it.expected,
-      testerName(it.tester_email),
-      it.status === "pass" ? "Pass" : it.status === "fail" ? "Fail" : it.status === "blocked" ? "보류" : "",
-      it.device ?? "", it.situation ?? "", it.screenshot_url ?? "", it.detail ?? "", it.confirmed ? "확인" : "",
-    ]);
+    const rows = allItems.flatMap((it) => {
+      if (it.checks.length === 0) {
+        return [[it.category_l1, it.category_l2 ?? "", it.category_l3 ?? "", it.title, it.steps, it.expected, "", "", "", "", "", "", ""]];
+      }
+      return it.checks.map((check) => [
+        it.category_l1, it.category_l2 ?? "", it.category_l3 ?? "", it.title, it.steps, it.expected,
+        testerName(check.tester_email),
+        check.status === "pass" ? "Pass" : check.status === "fail" ? "Fail" : check.status === "blocked" ? "보류" : "",
+        check.device ?? "", check.situation ?? "", check.screenshot_url ?? "", check.detail ?? "", check.confirmed ? "확인" : "",
+      ]);
+    });
     const csv = toCsv([header, ...rows]);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const a = document.createElement("a");
@@ -239,6 +265,13 @@ export function QaRoundDetailContent({ roundId }: QaRoundDetailContentProps) {
             ))}
           </SelectContent>
         </Select>
+        <Button
+          variant={issueOnly ? "default" : "outline"}
+          size="sm"
+          onClick={() => setIssueOnly((prev) => !prev)}
+        >
+          실패/보류 모아보기
+        </Button>
         <div className="flex-1" />
         <Button variant="outline" size="sm" onClick={handleExportCsv}>
           <Download className="mr-1.5 h-3.5 w-3.5" />
@@ -252,26 +285,80 @@ export function QaRoundDetailContent({ roundId }: QaRoundDetailContentProps) {
             <Skeleton key={i} className="h-24 w-full rounded-lg" />
           ))}
         </div>
+      ) : issueOnly ? (
+        issueRows.length === 0 ? (
+          <div className="text-muted-foreground flex h-40 items-center justify-center rounded-xl border border-dashed text-sm">
+            실패/보류 체크 결과가 없습니다.
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-56">위치</TableHead>
+                  <TableHead className="w-56">테스트 항목</TableHead>
+                  <TableHead className="w-36">체커</TableHead>
+                  <TableHead className="w-24">상태</TableHead>
+                  <TableHead className="w-48">디바이스</TableHead>
+                  <TableHead className="w-56">발생 상황</TableHead>
+                  <TableHead className="w-64">상세 내용</TableHead>
+                  <TableHead className="w-28">사진</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {issueRows.map(({ item, check }) => (
+                  <TableRow key={check.id}>
+                    <td className="px-2 py-2 align-top text-xs">
+                      <p className="font-semibold">{item.category_l1} / {item.category_l2 ?? "공통"}</p>
+                      <p className="text-muted-foreground">{item.category_l3 ?? "공통"}</p>
+                    </td>
+                    <td className="px-2 py-2 align-top text-sm font-medium">{item.title}</td>
+                    <td className="px-2 py-2 align-top text-xs">{testerName(check.tester_email)}</td>
+                    <td className="px-2 py-2 align-top text-xs">
+                      <Badge variant={check.status === "fail" ? "destructive" : "secondary"}>
+                        {check.status === "fail" ? "Fail" : "보류"}
+                      </Badge>
+                    </td>
+                    <td className="px-2 py-2 align-top text-xs">{check.device}</td>
+                    <td className="px-2 py-2 align-top text-xs">{check.situation}</td>
+                    <td className="px-2 py-2 align-top text-xs">{check.detail}</td>
+                    <td className="px-2 py-2 align-top text-xs">
+                      {check.screenshot_url ? (
+                        <a href={check.screenshot_url} target="_blank" rel="noreferrer" className="underline">
+                          보기
+                        </a>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )
       ) : groups.size === 0 ? (
         <div className="text-muted-foreground flex h-40 items-center justify-center rounded-xl border border-dashed text-sm">
           조건에 맞는 테스트 항목이 없습니다.
         </div>
       ) : (
         <div className="space-y-3">
-          {Array.from(groups.entries()).map(([l1, byL2]) => {
-            const l1Items = Array.from(byL2.values()).flat();
-            const failCount = l1Items.filter((it) => it.status === "fail").length;
-            const isOpen = openGroups.has(l1);
+          {Array.from(groups.entries()).map(([groupKey, group]) => {
+            const groupItems = Array.from(group.sections.values()).flat();
+            const failCount = groupItems.filter((it) => it.status === "fail").length;
+            const isOpen = openGroups.has(groupKey);
             return (
-              <div key={l1} className="rounded-lg border">
+              <div key={groupKey} className="rounded-lg border">
                 <button
                   type="button"
-                  onClick={() => toggleGroup(l1)}
+                  onClick={() => toggleGroup(groupKey)}
                   className="hover:bg-muted/50 flex w-full items-center gap-3 rounded-t-lg px-4 py-3 text-left"
                 >
                   <ChevronsUpDown className="text-muted-foreground h-4 w-4 shrink-0" />
-                  <span className="font-semibold">{l1}</span>
-                  <span className="text-muted-foreground text-xs tabular-nums">{l1Items.length}개 항목</span>
+                  <span className="font-semibold">{group.platform}</span>
+                  <span className="text-muted-foreground">/</span>
+                  <span className="font-semibold">{group.page}</span>
+                  <span className="text-muted-foreground text-xs tabular-nums">{groupItems.length}개 항목</span>
                   {failCount > 0 && (
                     <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
                       Fail {failCount}
@@ -284,6 +371,7 @@ export function QaRoundDetailContent({ roundId }: QaRoundDetailContentProps) {
                     <Table>
                       <TableHeader>
                         <TableRow>
+                          <TableHead className="w-48">위치</TableHead>
                           <TableHead className="w-56">테스트 항목</TableHead>
                           <TableHead className="w-64">테스트 절차</TableHead>
                           <TableHead className="w-56">기대 결과</TableHead>
@@ -293,22 +381,21 @@ export function QaRoundDetailContent({ roundId }: QaRoundDetailContentProps) {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {Array.from(byL2.entries()).map(([l2, l2Items]) => (
-                          <Fragment key={l2 || "__none__"}>
-                            {l2 && (
+                        {Array.from(group.sections.entries()).map(([section, sectionItems]) => (
+                          <Fragment key={section}>
+                            {section !== "공통" && (
                               <TableRow className="hover:bg-transparent">
-                                <td colSpan={6} className="text-muted-foreground bg-muted/30 px-2 py-1.5 text-xs font-semibold">
-                                  {l2}
+                                <td colSpan={7} className="text-muted-foreground bg-muted/30 px-2 py-1.5 text-xs font-semibold">
+                                  {section}
                                 </td>
                               </TableRow>
                             )}
-                            {l2Items.map((it) => (
+                            {sectionItems.map((it) => (
                               <QaRoundItemRow
                                 key={it.case_id}
                                 item={it}
                                 roundId={roundId}
                                 roundClosed={roundClosed}
-                                testers={testers}
                                 expanded={expandedIds.has(it.case_id)}
                                 onToggleExpand={() => toggleExpand(it.case_id)}
                                 onRemove={() => setRemoveTarget(it.case_id)}

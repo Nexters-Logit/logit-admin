@@ -12,7 +12,11 @@ export interface QaRound {
   closed_at: string | null;
   created_at: string;
   updated_at: string;
-  items: { status: "pass" | "fail" | "blocked" | null }[];
+  items: {
+    case_id: string;
+    status: "pass" | "fail" | "blocked" | null;
+    checks?: { status: "pass" | "fail" | "blocked" | null }[];
+  }[];
 }
 
 export interface QaRoundFormData {

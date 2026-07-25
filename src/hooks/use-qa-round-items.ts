@@ -19,6 +19,24 @@ export interface QaRoundItem {
   updated_by: string | null;
   created_at: string;
   updated_at: string;
+  checks: QaRoundItemCheck[];
+  my_check: QaRoundItemCheck | null;
+}
+
+export interface QaRoundItemCheck {
+  id: string;
+  round_id: string;
+  case_id: string;
+  tester_email: string;
+  status: "pass" | "fail" | "blocked" | null;
+  device: string | null;
+  situation: string | null;
+  screenshot_url: string | null;
+  detail: string | null;
+  confirmed: boolean;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export type QaRoundItemPatch = Partial<
@@ -85,6 +103,32 @@ export function useUpdateQaRoundItem(roundId: string) {
         throw new Error(error ?? "Failed to update QA round item");
       }
       return res.json() as Promise<QaRoundItem>;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["qa-round-items", roundId] }),
+  });
+}
+
+export type QaRoundItemCheckPatch = Partial<
+  Pick<
+    QaRoundItemCheck,
+    "status" | "device" | "situation" | "screenshot_url" | "detail" | "confirmed"
+  >
+>;
+
+export function useUpdateMyQaRoundItemCheck(roundId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ caseId, patch }: { caseId: string; patch: QaRoundItemCheckPatch }) => {
+      const res = await fetch(`/api/qa-sheet/rounds/${roundId}/items/${caseId}/checks/me`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({ error: null }));
+        throw new Error(error ?? "Failed to update my QA check");
+      }
+      return res.json() as Promise<QaRoundItemCheck>;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["qa-round-items", roundId] }),
   });

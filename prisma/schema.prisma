@@ -275,10 +275,36 @@ model QaRoundItem {
 
   round QaRound    @relation(fields: [round_id], references: [id], onDelete: Cascade)
   case  QaTestCase @relation(fields: [case_id], references: [id], onDelete: Restrict)
+  checks QaRoundItemCheck[]
 
   @@id([round_id, case_id])
   @@index([case_id])
   @@map("qa_test_results")
+}
+
+// 같은 QA 항목에 대해 여러 관리자가 각자 실행 결과를 남긴다.
+// qa_test_results는 라운드 항목 스냅샷이고, 이 테이블이 사람별 Pass/Fail/보류와 증빙을 가진다.
+model QaRoundItemCheck {
+  id             String   @id @db.Uuid
+  round_id       String
+  case_id        String
+  tester_email   String   @db.VarChar(255)
+  status         String?
+  device         String?  @db.Text
+  situation      String?  @db.Text
+  screenshot_url String?  @db.Text
+  detail         String?  @db.Text
+  confirmed      Boolean  @default(false)
+  updated_by     String?  @db.VarChar(255)
+  created_at     DateTime @default(now()) @db.Timestamptz
+  updated_at     DateTime @updatedAt @db.Timestamptz
+
+  item QaRoundItem @relation(fields: [round_id, case_id], references: [round_id, case_id], onDelete: Cascade)
+
+  @@unique([round_id, case_id, tester_email])
+  @@index([round_id, case_id])
+  @@index([status])
+  @@map("qa_round_item_checks")
 }
 
 model Plan {

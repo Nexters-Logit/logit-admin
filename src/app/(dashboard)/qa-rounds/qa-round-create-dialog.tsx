@@ -54,7 +54,7 @@ export function QaRoundCreateDialog({
 
   const importFromSource = (onlyFail: boolean) => {
     const ids = sourceItems
-      .filter((i) => !onlyFail || i.status === "fail")
+      .filter((i) => !onlyFail || i.checks.some((check) => check.status === "fail"))
       .map((i) => i.case_id);
     if (ids.length === 0) {
       toast.info(onlyFail ? "직전 라운드에 Fail 항목이 없습니다." : "가져올 항목이 없습니다.");

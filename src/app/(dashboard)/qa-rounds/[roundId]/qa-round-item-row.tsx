@@ -7,16 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import type { QaRoundItem } from "@/hooks/use-qa-round-items";
-import { useUpdateQaRoundItem } from "@/hooks/use-qa-round-items";
-import type { AdminUser } from "@/hooks/use-admin-users";
+import { useUpdateMyQaRoundItemCheck, useUpdateQaRoundItem } from "@/hooks/use-qa-round-items";
 import { ChevronDown, Trash2, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -30,7 +22,6 @@ interface QaRoundItemRowProps {
   item: QaRoundItem;
   roundId: string;
   roundClosed: boolean;
-  testers: AdminUser[];
   expanded: boolean;
   onToggleExpand: () => void;
   onRemove: () => void;
@@ -40,31 +31,31 @@ export function QaRoundItemRow({
   item,
   roundId,
   roundClosed,
-  testers,
   expanded,
   onToggleExpand,
   onRemove,
 }: QaRoundItemRowProps) {
   const updateItem = useUpdateQaRoundItem(roundId);
+  const updateMyCheck = useUpdateMyQaRoundItemCheck(roundId);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
 
   const [title, setTitle] = useState(item.title);
   const [steps, setSteps] = useState(item.steps);
   const [expected, setExpected] = useState(item.expected);
-  const [device, setDevice] = useState(item.device ?? "");
-  const [situation, setSituation] = useState(item.situation ?? "");
-  const [detail, setDetail] = useState(item.detail ?? "");
+  const [device, setDevice] = useState(item.my_check?.device ?? "");
+  const [situation, setSituation] = useState(item.my_check?.situation ?? "");
+  const [detail, setDetail] = useState(item.my_check?.detail ?? "");
 
   useEffect(() => {
     setTitle(item.title);
     setSteps(item.steps);
     setExpected(item.expected);
-    setDevice(item.device ?? "");
-    setSituation(item.situation ?? "");
-    setDetail(item.detail ?? "");
+    setDevice(item.my_check?.device ?? "");
+    setSituation(item.my_check?.situation ?? "");
+    setDetail(item.my_check?.detail ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [item.case_id]);
+  }, [item.case_id, item.my_check?.id]);
 
   const patch = (data: Parameters<typeof updateItem.mutate>[0]["patch"]) => {
     updateItem.mutate(
@@ -73,9 +64,38 @@ export function QaRoundItemRow({
     );
   };
 
+  const patchMyCheck = (data: Parameters<typeof updateMyCheck.mutate>[0]["patch"]) => {
+    updateMyCheck.mutate(
+      { caseId: item.case_id, patch: data },
+      { onError: (e) => toast.error(e instanceof Error ? e.message : "저장에 실패했습니다.") }
+    );
+  };
+
   const handleStatusClick = (status: "pass" | "fail" | "blocked") => {
     if (roundClosed) return;
-    patch({ status: item.status === status ? null : status });
+    if (item.my_check?.status === status) {
+      patchMyCheck({ status: null });
+      return;
+    }
+    if (status !== "pass") {
+      const hasEvidence =
+        device.trim() &&
+        situation.trim() &&
+        detail.trim() &&
+        item.my_check?.screenshot_url;
+      if (!hasEvidence) {
+        if (!expanded) onToggleExpand();
+        toast.error("Fail/보류는 디바이스, 발생 상황, 스크린샷, 상세 내용을 먼저 입력해주세요.");
+        return;
+      }
+    }
+    patchMyCheck({
+      status,
+      device,
+      situation,
+      detail,
+      screenshot_url: item.my_check?.screenshot_url ?? null,
+    });
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -94,7 +114,7 @@ export function QaRoundItemRow({
         return;
       }
       const { url } = await res.json();
-      patch({ screenshot_url: url });
+      patchMyCheck({ screenshot_url: url });
     } catch {
       toast.error("업로드에 실패했습니다.");
     } finally {
@@ -103,13 +123,23 @@ export function QaRoundItemRow({
     }
   };
 
-  const breadcrumb = [item.category_l2, item.category_l3].filter(Boolean).join(" › ");
-
   return (
     <>
       <TableRow>
+        <TableCell className="w-48 whitespace-normal align-top">
+          <div className="space-y-1">
+            <p className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
+              {item.category_l1}
+            </p>
+            <p className="text-xs font-semibold">{item.category_l2 ?? "공통"}</p>
+            {item.category_l3 && (
+              <span className="bg-muted inline-flex rounded px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                {item.category_l3}
+              </span>
+            )}
+          </div>
+        </TableCell>
         <TableCell className="max-w-56 whitespace-normal align-top">
-          {breadcrumb && <p className="text-muted-foreground mb-0.5 text-xs">{breadcrumb}</p>}
           <p className="font-medium">{item.title}</p>
         </TableCell>
         <TableCell className="text-muted-foreground max-w-64 whitespace-normal align-top text-xs">
@@ -119,23 +149,26 @@ export function QaRoundItemRow({
           {item.expected}
         </TableCell>
         <TableCell className="align-top">
-          <Select
-            value={item.tester_email ?? "__none__"}
-            onValueChange={(v) => patch({ tester_email: v === "__none__" ? null : v })}
-            disabled={roundClosed}
-          >
-            <SelectTrigger size="sm" className="w-32">
-              <SelectValue placeholder="미배정" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__none__">미배정</SelectItem>
-              {testers.map((t) => (
-                <SelectItem key={t.email} value={t.email}>
-                  {t.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="space-y-1 text-xs">
+            {(["pass", "fail", "blocked"] as const).map((status) => {
+              const count = item.checks.filter((check) => check.status === status).length;
+              if (count === 0) return null;
+              return (
+                <span
+                  key={status}
+                  className={cn(
+                    "mr-1 inline-flex rounded px-1.5 py-0.5 font-medium",
+                    status === "pass" && "bg-emerald-50 text-emerald-700",
+                    status === "fail" && "bg-red-50 text-red-700",
+                    status === "blocked" && "bg-amber-50 text-amber-700"
+                  )}
+                >
+                  {STATUS_CONFIG[status].label} {count}
+                </span>
+              );
+            })}
+            {item.checks.length === 0 && <span className="text-muted-foreground">미실행</span>}
+          </div>
         </TableCell>
         <TableCell className="align-top">
           <div className="inline-flex overflow-hidden rounded-md border">
@@ -147,7 +180,7 @@ export function QaRoundItemRow({
                 onClick={() => handleStatusClick(s)}
                 className={cn(
                   "border-r px-2 py-1 text-xs font-medium last:border-r-0 disabled:cursor-not-allowed disabled:opacity-60",
-                  item.status === s
+                  item.my_check?.status === s
                     ? STATUS_CONFIG[s].className
                     : "bg-background text-muted-foreground hover:bg-muted"
                 )}
@@ -177,7 +210,7 @@ export function QaRoundItemRow({
 
       {expanded && (
         <TableRow>
-          <TableCell colSpan={6} className="bg-muted/30 p-4">
+          <TableCell colSpan={7} className="bg-muted/30 p-4">
             <div className="grid grid-cols-3 gap-3">
               <div className="col-span-3 space-y-1.5">
                 <label className="text-xs font-medium">테스트 항목 (이 라운드에서만 수정됩니다)</label>
@@ -216,7 +249,7 @@ export function QaRoundItemRow({
                   value={device}
                   disabled={roundClosed}
                   onChange={(e) => setDevice(e.target.value)}
-                  onBlur={() => patch({ device })}
+                  onBlur={() => patchMyCheck({ device })}
                   placeholder="예: iPhone 15 Pro · Safari 17"
                 />
               </div>
@@ -226,7 +259,7 @@ export function QaRoundItemRow({
                   value={situation}
                   disabled={roundClosed}
                   onChange={(e) => setSituation(e.target.value)}
-                  onBlur={() => patch({ situation })}
+                  onBlur={() => patchMyCheck({ situation })}
                   placeholder="예: 문항 삭제 시도 중"
                 />
               </div>
@@ -239,10 +272,10 @@ export function QaRoundItemRow({
                   className="hidden"
                   onChange={handleFileChange}
                 />
-                {item.screenshot_url ? (
+                {item.my_check?.screenshot_url ? (
                   <div className="flex items-center gap-2">
                     <img
-                      src={item.screenshot_url}
+                      src={item.my_check.screenshot_url}
                       alt="스크린샷"
                       className="h-9 w-9 rounded object-cover"
                     />
@@ -277,7 +310,7 @@ export function QaRoundItemRow({
                   value={detail}
                   disabled={roundClosed}
                   onChange={(e) => setDetail(e.target.value)}
-                  onBlur={() => patch({ detail })}
+                  onBlur={() => patchMyCheck({ detail })}
                   placeholder="증상, 재현 절차, 기대와 다른 점 등을 자세히 작성해주세요"
                 />
               </div>
@@ -286,13 +319,13 @@ export function QaRoundItemRow({
                   <Checkbox
                     checked={item.confirmed}
                     disabled={roundClosed}
-                    onCheckedChange={(checked) => patch({ confirmed: checked === true })}
+                    onCheckedChange={(checked) => patchMyCheck({ confirmed: checked === true })}
                   />
                   담당자 확인 완료
                 </label>
-                {item.updated_by && (
+                {item.my_check?.updated_by && (
                   <span className="text-muted-foreground text-xs">
-                    마지막 수정: {item.updated_by}
+                    마지막 수정: {item.my_check.updated_by}
                   </span>
                 )}
               </div>
