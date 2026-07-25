@@ -8,13 +8,16 @@ import {
   useQaRoundItems,
   useAddCasesToRound,
   useRemoveCaseFromRound,
+  useImportQaRoundItems,
   type QaRoundItem,
 } from "@/hooks/use-qa-round-items";
 import { useAdminUsers } from "@/hooks/use-admin-users";
 import { computeQaStats } from "@/lib/qa-stats";
+import { toCsv } from "@/lib/csv";
 import { PageHeader } from "@/components/shared/page-header";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { QaAddCasesDialog } from "./qa-add-cases-dialog";
+import { QaCsvImportDialog } from "./qa-csv-import-dialog";
 import { QaRoundItemRow } from "./qa-round-item-row";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,15 +31,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Table, TableHeader, TableBody, TableRow, TableHead } from "@/components/ui/table";
-import { Plus, Download, ChevronsUpDown, ArrowLeft, Lock, LockOpen } from "lucide-react";
+import { Plus, Download, Upload, ChevronsUpDown, ArrowLeft, Lock, LockOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type StatusFilter = "all" | "pass" | "fail" | "blocked" | "untested";
-
-function csvEscape(value: unknown): string {
-  const v = value == null ? "" : String(value);
-  return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
-}
 
 interface QaRoundDetailContentProps {
   roundId: string;
@@ -49,6 +47,7 @@ export function QaRoundDetailContent({ roundId }: QaRoundDetailContentProps) {
   const updateRound = useUpdateQaRound();
   const addCases = useAddCasesToRound(roundId);
   const removeCase = useRemoveCaseFromRound(roundId);
+  const importItems = useImportQaRoundItems(roundId);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -56,6 +55,7 @@ export function QaRoundDetailContent({ roundId }: QaRoundDetailContentProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<string | null>(null);
 
   const toggleExpand = (caseId: string) => {
@@ -123,7 +123,7 @@ export function QaRoundDetailContent({ roundId }: QaRoundDetailContentProps) {
       it.status === "pass" ? "Pass" : it.status === "fail" ? "Fail" : it.status === "blocked" ? "보류" : "",
       it.device ?? "", it.situation ?? "", it.screenshot_url ?? "", it.detail ?? "", it.confirmed ? "확인" : "",
     ]);
-    const csv = "﻿" + [header, ...rows].map((r) => r.map(csvEscape).join(",")).join("\n");
+    const csv = toCsv([header, ...rows]);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -180,6 +180,10 @@ export function QaRoundDetailContent({ roundId }: QaRoundDetailContentProps) {
               <Lock className="mr-2 h-4 w-4" />
             )}
             {roundClosed ? "라운드 재개" : "라운드 종료"}
+          </Button>
+          <Button variant="outline" onClick={() => setImportDialogOpen(true)} disabled={roundClosed}>
+            <Upload className="mr-2 h-4 w-4" />
+            CSV로 가져오기
           </Button>
           <Button onClick={() => setAddDialogOpen(true)} disabled={roundClosed}>
             <Plus className="mr-2 h-4 w-4" />
@@ -334,6 +338,23 @@ export function QaRoundDetailContent({ roundId }: QaRoundDetailContentProps) {
               setAddDialogOpen(false);
             },
             onError: (e) => toast.error(e instanceof Error ? e.message : "추가에 실패했습니다."),
+          });
+        }}
+      />
+
+      <QaCsvImportDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+        isPending={importItems.isPending}
+        onSubmit={(rows) => {
+          importItems.mutate(rows, {
+            onSuccess: (result) => {
+              toast.success(
+                `가져오기 완료 — 신규 케이스 ${result.casesCreated}개, 기존 케이스 재사용 ${result.casesReused}개, 라운드에 추가 ${result.itemsAdded}개${result.itemsSkipped ? `, 이미 있던 항목 ${result.itemsSkipped}개 건너뜀` : ""}`
+              );
+              setImportDialogOpen(false);
+            },
+            onError: (e) => toast.error(e instanceof Error ? e.message : "가져오기에 실패했습니다."),
           });
         }}
       />

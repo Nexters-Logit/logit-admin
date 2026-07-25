@@ -90,6 +90,44 @@ export function useUpdateQaRoundItem(roundId: string) {
   });
 }
 
+export interface QaRoundImportRow {
+  category_l1: string;
+  category_l2?: string;
+  category_l3?: string;
+  title: string;
+  steps: string;
+  expected: string;
+}
+
+export interface QaRoundImportResult {
+  casesCreated: number;
+  casesReused: number;
+  itemsAdded: number;
+  itemsSkipped: number;
+}
+
+export function useImportQaRoundItems(roundId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (rows: QaRoundImportRow[]) => {
+      const res = await fetch(`/api/qa-sheet/rounds/${roundId}/import`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows }),
+      });
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({ error: null }));
+        throw new Error(error ?? "Failed to import QA CSV");
+      }
+      return res.json() as Promise<QaRoundImportResult>;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["qa-round-items", roundId] });
+      qc.invalidateQueries({ queryKey: ["qa-cases"] });
+    },
+  });
+}
+
 export function useRemoveCaseFromRound(roundId: string) {
   const qc = useQueryClient();
   return useMutation({
