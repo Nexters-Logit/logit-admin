@@ -18,6 +18,9 @@ import {
   ScrollText,
   Cpu,
   Coins,
+  ClipboardCheck,
+  Library,
+  UserCog,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -53,6 +56,14 @@ const navGroups = [
     label: null,
     items: [
       { href: "/database", label: "데이터베이스", icon: Database },
+    ],
+  },
+  {
+    label: "QA",
+    items: [
+      { href: "/qa-rounds", label: "QA 라운드", icon: ClipboardCheck },
+      { href: "/qa-case-bank", label: "QA 케이스 뱅크", icon: Library },
+      { href: "/admin-users", label: "관리자 관리", icon: UserCog },
     ],
   },
 ];

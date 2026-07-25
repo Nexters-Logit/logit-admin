@@ -5,6 +5,7 @@ import { extname } from "path";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+const ALLOWED_FOLDERS = ["banners", "qa-sheet"];
 
 export async function POST(req: NextRequest) {
   try {
@@ -27,8 +28,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const requestedFolder = formData.get("folder") as string | null;
+    const folder = ALLOWED_FOLDERS.includes(requestedFolder ?? "") ? (requestedFolder as string) : "banners";
     const ext = extname(file.name) || `.${file.type.split("/")[1]}`;
-    const key = `banners/${randomUUID()}${ext}`;
+    const key = `${folder}/${randomUUID()}${ext}`;
     const buffer = Buffer.from(await file.arrayBuffer());
 
     const url = await uploadFile(buffer, key, file.type);

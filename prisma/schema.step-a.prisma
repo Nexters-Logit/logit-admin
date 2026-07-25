@@ -1,3 +1,10 @@
+// ⚠️ 임시 마이그레이션 헬퍼 파일 — QA 라운드 마이그레이션 전용.
+// qa_rounds 테이블 생성 + qa_test_results에 nullable 컬럼 추가(STEP A)만을 위해
+// `prisma db push --schema=prisma/schema.step-a.prisma` 로 한 번 사용하고,
+// scripts/migrate-qa-rounds.ts 백필이 끝나면 실제 schema.prisma(STEP C, 최종본)로
+// `prisma db push`를 다시 실행한 뒤 이 파일은 삭제한다.
+// 자세한 절차는 scripts/migrate-qa-rounds.ts 상단 주석 참고.
+
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -225,7 +232,7 @@ model QaTestCase {
   created_at  DateTime @default(now()) @db.Timestamptz
   updated_at  DateTime @updatedAt @db.Timestamptz
 
-  results QaRoundItem[]
+  results QaRoundItem?
 
   @@index([category_l1, category_l2, category_l3])
   @@map("qa_test_cases")
@@ -252,32 +259,29 @@ model QaRound {
 // 라운드에 케이스가 "포함되어 있다"는 사실 자체를 이 row의 존재로 표현한다
 // (별도 join 테이블 없음). category_l1~expected는 담는 시점의 스냅샷이라
 // 케이스 뱅크 원본을 나중에 수정해도 과거 라운드 기록은 바뀌지 않는다.
-// case 삭제는 Restrict — 한 번이라도 라운드에 쓰인 케이스는 뱅크에서 물리 삭제할 수 없다.
+// STEP A: round_id/스냅샷 필드는 잠시 nullable — 백필 후 STEP C에서 필수/복합키로 강화한다.
 model QaRoundItem {
-  round_id       String
-  case_id        String
-  category_l1    String   @db.VarChar(50)
-  category_l2    String?  @db.VarChar(50)
-  category_l3    String?  @db.VarChar(50)
-  title          String   @db.VarChar(200)
-  steps          String   @db.Text
-  expected       String   @db.Text
-  tester_email   String?  @db.VarChar(255)
+  case_id        String    @id // STEP C: round_id와 함께 복합 PK로 변경
+  round_id       String? // STEP C: required
+  category_l1    String?   @db.VarChar(50) // STEP C: required (스냅샷)
+  category_l2    String?   @db.VarChar(50)
+  category_l3    String?   @db.VarChar(50)
+  title          String? // STEP C: required, @db.VarChar(200)
+  steps          String?   @db.Text // STEP C: required
+  expected       String?   @db.Text // STEP C: required
+  tester_email   String?   @db.VarChar(255)
   status         String?
-  device         String?  @db.Text
-  situation      String?  @db.Text
-  screenshot_url String?  @db.Text
-  detail         String?  @db.Text
-  confirmed      Boolean  @default(false)
-  updated_by     String?  @db.VarChar(255)
-  created_at     DateTime @default(now()) @db.Timestamptz
-  updated_at     DateTime @updatedAt @db.Timestamptz
+  device         String?   @db.Text
+  situation      String?   @db.Text
+  screenshot_url String?   @db.Text
+  detail         String?   @db.Text
+  confirmed      Boolean   @default(false)
+  updated_by     String?   @db.VarChar(255)
+  updated_at     DateTime  @updatedAt @db.Timestamptz
 
-  round QaRound    @relation(fields: [round_id], references: [id], onDelete: Cascade)
-  case  QaTestCase @relation(fields: [case_id], references: [id], onDelete: Restrict)
+  case  QaTestCase @relation(fields: [case_id], references: [id], onDelete: Cascade) // STEP C: onDelete Restrict
+  round QaRound?   @relation(fields: [round_id], references: [id], onDelete: Cascade)
 
-  @@id([round_id, case_id])
-  @@index([case_id])
   @@map("qa_test_results")
 }
 
