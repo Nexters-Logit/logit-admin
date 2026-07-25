@@ -2,8 +2,9 @@
 
 import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { useQaRound, useUpdateQaRound } from "@/hooks/use-qa-rounds";
+import { useDeleteQaRound, useQaRound, useUpdateQaRound } from "@/hooks/use-qa-rounds";
 import {
   useQaRoundItems,
   useAddCasesToRound,
@@ -31,7 +32,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Table, TableHeader, TableBody, TableRow, TableHead } from "@/components/ui/table";
-import { Plus, Download, Upload, ChevronsUpDown, ArrowLeft, Lock, LockOpen } from "lucide-react";
+import {
+  Plus,
+  Download,
+  Upload,
+  ChevronsUpDown,
+  ArrowLeft,
+  Lock,
+  LockOpen,
+  Trash2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type StatusFilter = "all" | "pass" | "fail" | "blocked" | "untested";
@@ -41,10 +51,12 @@ interface QaRoundDetailContentProps {
 }
 
 export function QaRoundDetailContent({ roundId }: QaRoundDetailContentProps) {
+  const router = useRouter();
   const { data: round, isLoading: roundLoading } = useQaRound(roundId);
   const { data: items, isLoading: itemsLoading } = useQaRoundItems(roundId);
   const { data: testers = [] } = useAdminUsers();
   const updateRound = useUpdateQaRound();
+  const deleteRound = useDeleteQaRound();
   const addCases = useAddCasesToRound(roundId);
   const removeCase = useRemoveCaseFromRound(roundId);
   const importItems = useImportQaRoundItems(roundId);
@@ -58,6 +70,7 @@ export function QaRoundDetailContent({ roundId }: QaRoundDetailContentProps) {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<string | null>(null);
+  const [deleteRoundOpen, setDeleteRoundOpen] = useState(false);
 
   const toggleExpand = (caseId: string) => {
     setExpandedIds((prev) => {
@@ -214,6 +227,16 @@ export function QaRoundDetailContent({ roundId }: QaRoundDetailContentProps) {
           <Button onClick={() => setAddDialogOpen(true)} disabled={roundClosed}>
             <Plus className="mr-2 h-4 w-4" />
             항목 추가
+          </Button>
+          <Button
+            type="button"
+            size="icon"
+            variant="destructive"
+            aria-label="라운드 삭제"
+            title="라운드 삭제"
+            onClick={() => setDeleteRoundOpen(true)}
+          >
+            <Trash2 className="h-4 w-4" />
           </Button>
         </PageHeader>
       </div>
@@ -462,6 +485,27 @@ export function QaRoundDetailContent({ roundId }: QaRoundDetailContentProps) {
               setRemoveTarget(null);
             },
             onError: (e) => toast.error(e instanceof Error ? e.message : "제거에 실패했습니다."),
+          });
+        }}
+      />
+
+      <ConfirmDialog
+        open={deleteRoundOpen}
+        onOpenChange={setDeleteRoundOpen}
+        title="QA 라운드 삭제"
+        description={`"${round.name}" 라운드와 이 라운드의 체크 결과가 모두 삭제됩니다. 케이스 뱅크 원본은 유지됩니다.`}
+        variant="destructive"
+        confirmLabel="삭제"
+        loading={deleteRound.isPending}
+        onConfirm={() => {
+          deleteRound.mutate(roundId, {
+            onSuccess: () => {
+              toast.success("QA 라운드를 삭제했습니다.");
+              setDeleteRoundOpen(false);
+              router.push("/qa-rounds");
+            },
+            onError: (e) =>
+              toast.error(e instanceof Error ? e.message : "라운드 삭제에 실패했습니다."),
           });
         }}
       />
