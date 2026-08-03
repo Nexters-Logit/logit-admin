@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerEnv, getBeUrl } from "@/lib/env";
 
 export async function POST(
   _req: NextRequest,
@@ -6,7 +7,7 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const beUrl = process.env.BE_INTERNAL_URL ?? "http://localhost:8000";
+    const beUrl = getBeUrl(await getServerEnv());
     const adminSecret = process.env.ADMIN_SECRET;
 
     if (!adminSecret) {

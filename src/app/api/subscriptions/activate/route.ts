@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerEnv, getBeUrl } from "@/lib/env";
 
 export async function POST(req: NextRequest) {
   try {
@@ -11,7 +12,10 @@ export async function POST(req: NextRequest) {
     // 결제 이력에 남길 정보를 그대로 BE에 전달 — user_id/type은 구독이 아예
     // 없는 상태(웹훅이 한 번도 안 온 경우)도 구제할 수 있어야 해서 기존
     // subscriptions row 조회 없이 직접 받는다.
-    const beUrl = process.env.BE_INTERNAL_URL ?? "http://localhost:8000";
+    // BE 주소는 현재 화면의 dev/production 토글을 그대로 따라간다 — 안 그러면
+    // "production" 화면에서 유저를 구제했는데 실제로는 dev 백엔드가 처리하는
+    // 불일치가 생긴다.
+    const beUrl = getBeUrl(await getServerEnv());
     const adminSecret = process.env.ADMIN_SECRET;
 
     if (!adminSecret) {
