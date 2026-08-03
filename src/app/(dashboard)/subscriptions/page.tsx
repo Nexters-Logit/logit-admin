@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ColumnDef } from "@tanstack/react-table";
-import { Search, MoreHorizontal, Plus } from "lucide-react";
+import { Search, MoreHorizontal, Plus, Wrench } from "lucide-react";
 import { format } from "date-fns";
 import Link from "next/link";
 import Image from "next/image";
@@ -96,9 +96,29 @@ type AddForm = {
   days: string;
 };
 
+type RescueForm = {
+  user_id: string;
+  type: string;
+  plan: string;
+  rebill_no: string;
+  mul_no: string;
+  amount: string;
+  notes: string;
+};
+
 const PLAN_OPTIONS: Record<string, string[]> = {
   logit: ["lite", "pro"],
   mcp: ["basic"],
+};
+
+const RESCUE_FORM_DEFAULT: RescueForm = {
+  user_id: "",
+  type: "logit",
+  plan: "lite",
+  rebill_no: "",
+  mul_no: "",
+  amount: "",
+  notes: "",
 };
 
 export default function SubscriptionsPage() {
@@ -111,6 +131,8 @@ export default function SubscriptionsPage() {
   const [deactivateTarget, setDeactivateTarget] = useState<SubRow | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [addForm, setAddForm] = useState<AddForm>({ user_id: "", type: "logit", plan: "lite", days: "31" });
+  const [rescueOpen, setRescueOpen] = useState(false);
+  const [rescueForm, setRescueForm] = useState<RescueForm>(RESCUE_FORM_DEFAULT);
 
   const { data, isLoading } = useQuery<{ data: SubRow[]; total: number; totalPages: number }>({
     queryKey: ["subscriptions", { page, search, subType, isActive }],
@@ -157,6 +179,28 @@ export default function SubscriptionsPage() {
       toast.success("구독을 추가했습니다.");
       setAddOpen(false);
       setAddForm({ user_id: "", type: "logit", plan: "lite", days: "31" });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const rescueSub = useMutation({
+    mutationFn: async (body: object) => {
+      const r = await fetch("/api/subscriptions/activate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error ?? "Failed");
+      }
+      return r.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["subscriptions"] });
+      toast.success("구독을 수동 활성화했습니다.");
+      setRescueOpen(false);
+      setRescueForm(RESCUE_FORM_DEFAULT);
     },
     onError: (e) => toast.error(e.message),
   });
@@ -262,10 +306,16 @@ export default function SubscriptionsPage() {
   return (
     <div className="space-y-4">
       <PageHeader title="구독 현황" description="유저별 구독 상태를 관리합니다.">
-        <Button size="sm" onClick={() => setAddOpen(true)}>
-          <Plus className="mr-1.5 h-4 w-4" />
-          구독 추가
-        </Button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => setRescueOpen(true)}>
+            <Wrench className="mr-1.5 h-4 w-4" />
+            결제 미반영 구제
+          </Button>
+          <Button size="sm" onClick={() => setAddOpen(true)}>
+            <Plus className="mr-1.5 h-4 w-4" />
+            구독 추가
+          </Button>
+        </div>
       </PageHeader>
 
       <div className="flex flex-col gap-3 sm:flex-row">
@@ -385,6 +435,115 @@ export default function SubscriptionsPage() {
                 disabled={addSub.isPending || !addForm.user_id.trim()}
               >
                 {addSub.isPending ? "추가 중..." : "추가"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rescue (manual activate) dialog — PayApp은 승인됐지만 웹훅 미반영으로 구독이 안 걸린 경우 */}
+      <Dialog open={rescueOpen} onOpenChange={(o) => !o && setRescueOpen(false)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>결제 미반영 구제</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground -mt-2">
+            PayApp 대시보드에서는 결제가 승인됐지만 웹훅 처리 실패 등으로 서버에
+            반영되지 않은 경우에만 사용하세요. 결제 이력에 수동 활성화 기록이 남습니다.
+          </p>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-1">
+              <Label>유저 ID (UUID)</Label>
+              <Input
+                value={rescueForm.user_id}
+                onChange={(e) => setRescueForm({ ...rescueForm, user_id: e.target.value })}
+                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                className="font-mono text-xs"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>구독 타입</Label>
+                <Select
+                  value={rescueForm.type}
+                  onValueChange={(v) =>
+                    setRescueForm({ ...rescueForm, type: v, plan: PLAN_OPTIONS[v][0] })
+                  }
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="logit">Logit</SelectItem>
+                    <SelectItem value="mcp">MCP</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>플랜</Label>
+                <Select
+                  value={rescueForm.plan}
+                  onValueChange={(v) => setRescueForm({ ...rescueForm, plan: v })}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(PLAN_OPTIONS[rescueForm.type] ?? []).map((p) => (
+                      <SelectItem key={p} value={p} className="capitalize">{p}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>rebill_no (선택)</Label>
+                <Input
+                  value={rescueForm.rebill_no}
+                  onChange={(e) => setRescueForm({ ...rescueForm, rebill_no: e.target.value })}
+                  placeholder="PayApp 빌링 번호"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>mul_no (선택)</Label>
+                <Input
+                  value={rescueForm.mul_no}
+                  onChange={(e) => setRescueForm({ ...rescueForm, mul_no: e.target.value })}
+                  placeholder="PayApp 거래번호"
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label>결제 금액 (선택, 미입력 시 플랜 가격 사용)</Label>
+              <Input
+                type="number"
+                value={rescueForm.amount}
+                onChange={(e) => setRescueForm({ ...rescueForm, amount: e.target.value })}
+                placeholder="예: 6900"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>메모 (선택)</Label>
+              <Input
+                value={rescueForm.notes}
+                onChange={(e) => setRescueForm({ ...rescueForm, notes: e.target.value })}
+                placeholder="구제 사유"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" onClick={() => setRescueOpen(false)}>취소</Button>
+              <Button
+                onClick={() =>
+                  rescueSub.mutate({
+                    user_id: rescueForm.user_id,
+                    type: rescueForm.type,
+                    plan: rescueForm.plan,
+                    rebill_no: rescueForm.rebill_no || undefined,
+                    mul_no: rescueForm.mul_no || undefined,
+                    amount: rescueForm.amount ? Number(rescueForm.amount) : undefined,
+                    notes: rescueForm.notes || undefined,
+                  })
+                }
+                disabled={rescueSub.isPending || !rescueForm.user_id.trim()}
+              >
+                {rescueSub.isPending ? "활성화 중..." : "수동 활성화"}
               </Button>
             </div>
           </div>
