@@ -58,13 +58,19 @@ export async function GET(req: NextRequest) {
     ]);
 
     const total = Number(countResult[0]?.cnt ?? 0);
-    const data = rows.map((r) => ({
-      ...r,
-      _count: {
-        projects: Number(r.project_count ?? 0),
-        chats: Number(r.chat_count ?? 0),
-      },
-    }));
+    const data = rows.map((r) => {
+      // project_count/chat_count는 Postgres COUNT(*)(bigint)로 돌아와 JSON.stringify가
+      // 직렬화하지 못하고 터진다 (TypeError: Do not know how to serialize a BigInt).
+      // _count로 변환한 값만 남기고 원본 bigint 필드는 스프레드에서 제외해야 한다.
+      const { project_count, chat_count, ...rest } = r;
+      return {
+        ...rest,
+        _count: {
+          projects: Number(project_count ?? 0),
+          chats: Number(chat_count ?? 0),
+        },
+      };
+    });
 
     return NextResponse.json({
       data,
