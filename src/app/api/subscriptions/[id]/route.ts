@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPrisma } from "@/lib/prisma";
-import { getServerEnv } from "@/lib/env";
+import { getServerEnv, getBeUrl } from "@/lib/env";
 
 export async function PATCH(
   req: NextRequest,
@@ -59,7 +59,7 @@ export async function DELETE(
     const { user_id, type: sub_type } = rows[0];
 
     // BE 내부 엔드포인트 호출 — PayApp 취소 + DB 비활성화
-    const beUrl = process.env.BE_INTERNAL_URL ?? "http://localhost:8000";
+    const beUrl = getBeUrl(env);
     const adminSecret = process.env.ADMIN_SECRET;
 
     if (!adminSecret) {
